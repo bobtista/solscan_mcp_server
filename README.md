@@ -4,7 +4,7 @@
 
 A Model Context Protocol server for interacting with the Solscan Pro API. This server provides tools to query token information, account activities, and transaction details on the Solana blockchain via Large Language Models.
 
-Please note that solscan-mcp-server requires a Solscan Pro API key to function. You can obtain one from [Solscan Pro](https://pro.solscan.io/).
+Please note that solscan-mcp-server requires a Solscan Pro API key to function. You can obtain one from [Solscan APIs](https://solscan.io/apis).
 
 ### Tools
 
