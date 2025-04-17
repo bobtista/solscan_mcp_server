@@ -1,11 +1,11 @@
 [project]
 name = "solscan-mcp-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Model Context Protocol server providing tools to interact with the Solscan Pro API via LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Bobby Battista" }]
-keywords = ["solana", "solscan", "mcp", "llm", "automation"]
+keywords = ["solana", "solscan", "blockchain", "mcp", "llm", "automation", "defi"]
 license = { text = "MIT" }
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -13,12 +13,20 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "aiohttp>=3.9.0",
+    "aiohttp==3.11.0",
     "click>=8.1.7",
     "mcp>=1.0.0",
     "pydantic>=2.0.0",
+    "fastmcp>=2.1.1",
+    "typing-extensions>=4.5.0",  # For enhanced type hints
+    "python-dotenv>=1.0.0",     # For .env file support
 ]
 
 [project.optional-dependencies]
@@ -26,7 +34,10 @@ dev = [
     "pyright>=1.1.389",
     "ruff>=0.7.3", 
     "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0"
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",        # For coverage reporting
+    "black>=24.2.0",           # For code formatting
 ]
 
 [project.scripts]
