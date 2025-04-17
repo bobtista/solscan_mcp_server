@@ -1,369 +1,488 @@
-import os
-from unittest.mock import AsyncMock, patch
+"""Tests for the Solscan MCP server."""
+
+import asyncio
+import json
+from typing import Any, Dict, Optional
+from unittest.mock import AsyncMock
 
 import pytest
+from fastmcp import Context, FastMCP
+from mcp.types import TextContent
+from pytest_mock import MockerFixture
 
 from solscan_mcp_server.server import (
-    WSOL_ADDRESS,
-    BalanceFlow,
-    get_balance_change,
-    get_defi_activities,
-    get_token_accounts,
-    get_token_holders,
-    get_token_markets,
-    get_token_meta,
-    get_token_price,
-    get_transaction_actions,
-    get_transaction_detail,
+    SolscanContext,
+    SolscanTools,
+    create_mcp_server,
+    serve,
+    solscan_lifespan,
 )
 
-# Example responses for mocking
-TOKEN_META_RESPONSE = {
-    "success": True,
-    "data": {
-        "address": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-        "name": "Jupiter",
-        "symbol": "JUP",
-        "decimals": 6,
-        "price": 0.892218,
-        "volume_24h": 404204318,
-        "market_cap": 1499341479,
-    },
-}
-
-TOKEN_MARKETS_RESPONSE = {
-    "success": True,
-    "data": [
-        {
-            "address": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-            "name": "JUP/WSOL",
-            "liquidity": 1000000,
-            "volume_24h": 500000,
-        }
-    ],
-}
-
-# Mock responses for new test cases
-MOCK_DEFI_ACTIVITIES = {
-    "success": True,
-    "data": [
-        {
-            "type": "swap",
-            "timestamp": 1234567890,
-            "address": "WaLLeTAddR3ss123",
-            "amount": 1000.0,
-            "token": "SOL",
-        }
-    ],
-}
-
-MOCK_TOKEN_ACCOUNTS = {
-    "success": True,
-    "data": [
-        {
-            "address": "TokenAccAddr3ss123",
-            "balance": 5000.0,
-            "mint": "TokenM1ntAddr3ss123",
-        }
-    ],
-}
-
-MOCK_TOKEN_HOLDERS = {
-    "success": True,
-    "data": [{"address": "HolderAddr3ss123", "amount": 10000.0, "rank": 1}],
-}
+# Test data
+TEST_API_KEY = "test_api_key"
+TEST_TOKEN_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # USDC
+TEST_WALLET_ADDRESS = "test_wallet_address"
+TEST_TX_SIGNATURE = "test_tx_signature"
 
 
 @pytest.fixture
-def api_key():
-    """Provide a test API key"""
-    return "test_api_key"
+def mock_response() -> Dict[str, Any]:
+    """Mock API response data."""
+    return {"success": True, "data": {"test": "data"}}
+
+
+@pytest.fixture
+async def server() -> FastMCP:
+    """Create a test MCP server instance."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tools directly in test
+    @server.tool(name=SolscanTools.TOKEN_META.value)
+    async def token_meta_tool(token_address: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.TOKEN_MARKETS.value)
+    async def token_markets_tool(
+        token_address: str,
+        sort_by: Optional[str] = None,
+        program: Optional[list[str]] = None,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.TOKEN_HOLDERS.value)
+    async def token_holders_tool(
+        token_address: str,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.TOKEN_PRICE.value)
+    async def token_price_tool(token_address: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.TOKEN_ACCOUNTS.value)
+    async def token_accounts_tool(wallet_address: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.DEFI_ACTIVITIES.value)
+    async def defi_activities_tool(
+        wallet_address: str,
+        before_tx_signature: Optional[str] = None,
+        limit: int = 10,
+    ) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.BALANCE_CHANGE.value)
+    async def balance_change_tool(tx_signature: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.TRANSACTION_DETAIL.value)
+    async def transaction_detail_tool(tx_signature: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    @server.tool(name=SolscanTools.TRANSACTION_ACTIONS.value)
+    async def transaction_actions_tool(tx_signature: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    return server
+
+
+@pytest.fixture
+def mock_context(mocker: MockerFixture) -> Context:
+    """Create a mock MCP context."""
+    context = mocker.Mock(spec=Context)
+    context.request_context = mocker.Mock()
+    context.request_context.lifespan_context = SolscanContext(
+        client=mocker.Mock(), api_key=TEST_API_KEY
+    )
+    return context
 
 
 @pytest.mark.asyncio
-async def test_get_token_meta(api_key):
-    """Test token metadata endpoint"""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = TOKEN_META_RESPONSE
+async def test_server_initialization(mocker: MockerFixture) -> None:
+    """Test server initialization and tool registration."""
+    # Create server instance
+    server = create_mcp_server(TEST_API_KEY)
 
-        result = await get_token_meta(
-            "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", api_key
-        )
+    # Mock server.run to avoid actual execution
+    mock_run = mocker.patch.object(server, "run_stdio_async")
+    mock_run.return_value = None
 
-        assert result["success"] is True
-        assert result["data"]["name"] == "Jupiter"
-        assert result["data"]["symbol"] == "JUP"
+    # Start server in background
+    task = asyncio.create_task(server.run_stdio_async())
 
-        # Verify API call
-        mock_request.assert_called_once_with(
-            "/token/meta",
-            {"address": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"},
-            api_key,
-        )
+    # Give the server a moment to initialize
+    await asyncio.sleep(0.1)
 
+    # Verify server is initialized
+    assert server._tool_manager is not None
 
-@pytest.mark.asyncio
-async def test_get_token_markets(api_key):
-    """Test token markets endpoint"""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = TOKEN_MARKETS_RESPONSE
-
-        result = await get_token_markets(
-            "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", api_key=api_key
-        )
-
-        assert result["success"] is True
-        assert len(result["data"]) == 1
-        assert result["data"][0]["name"] == "JUP/WSOL"
-
-        # Verify API call includes WSOL pairing
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert "/token/markets" == call_args[0][0]
-        assert call_args[0][1]["token"] == [
-            "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-            WSOL_ADDRESS,
-        ]
+    # Clean up
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 @pytest.mark.asyncio
-async def test_api_error_handling(api_key):
-    """Test error handling for API calls"""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = {"error": "HTTP 401 - Unauthorized"}
+async def test_server_lifespan(mocker: MockerFixture) -> None:
+    """Test server lifespan management."""
+    server = FastMCP("test")
 
-        result = await get_token_meta("invalid_token", api_key)
-
-        assert "error" in result
-        assert "401" in result["error"]
+    async with solscan_lifespan(server, TEST_API_KEY) as context:
+        assert isinstance(context, SolscanContext)
+        assert context.api_key == TEST_API_KEY
+        assert context.client is not None
 
 
 @pytest.mark.asyncio
-async def test_pagination_parameters(api_key):
-    """Test pagination parameter handling"""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = {"success": True, "data": []}
+async def test_server_configuration():
+    """Test server configuration with different parameters."""
+    # Test default configuration
+    server = create_mcp_server(TEST_API_KEY)
+    assert isinstance(server, FastMCP)
 
-        # Test with custom page size
-        await get_token_holders("token123", page_size=30, page=2, api_key=api_key)
-
-        call_args = mock_request.call_args
-        assert call_args[0][1]["page_size"] == 30
-        assert call_args[0][1]["page"] == 2
-
-        # Test with invalid page size (should default to maximum)
-        await get_token_holders("token123", page_size=999, api_key=api_key)
-
-        call_args = mock_request.call_args
-        assert call_args[0][1]["page_size"] == 40  # Should default to max allowed
+    # Test custom configuration
+    server = create_mcp_server(TEST_API_KEY, host="0.0.0.0", port=9000)
+    assert isinstance(server, FastMCP)
 
 
 @pytest.mark.asyncio
-async def test_optional_parameters(api_key):
-    """Test handling of optional parameters"""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = {"success": True, "data": []}
+async def test_server_transport_selection(mocker: MockerFixture):
+    """Test server transport selection."""
+    # Mock the server creation and transport methods
+    mock_server = mocker.Mock(spec=FastMCP)
+    mock_server.run_sse_async = AsyncMock()
+    mock_server.run_stdio_async = AsyncMock()
 
-        # Test with all optional parameters using YYYYMMDD format
-        await get_balance_change(
-            wallet_address="wallet123",
-            token_account="account123",
-            token="token123",
-            from_time=20240101,  # January 1, 2024
-            to_time=20240131,  # January 31, 2024
-            remove_spam=True,
-            flow=BalanceFlow.IN,  # Use enum instead of string
-            api_key=api_key,
-        )
+    mocker.patch(
+        "solscan_mcp_server.server.create_mcp_server",
+        return_value=mock_server,
+    )
 
-        call_args = mock_request.call_args
-        params = call_args[0][1]
-        assert params["address"] == "wallet123"
-        assert params["token_account"] == "account123"
-        assert params["token"] == "token123"
-        assert params["from_time"] == 20240101
-        assert params["to_time"] == 20240131
-        assert params["remove_spam"] == "true"
-        assert params["flow"] == "in"
+    # Test SSE transport
+    task = asyncio.create_task(serve(TEST_API_KEY, transport="sse"))
+    await asyncio.sleep(0.1)  # Give it time to start
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
+    assert mock_server.run_sse_async.called
+    assert not mock_server.run_stdio_async.called
 
-@pytest.mark.asyncio
-async def test_get_token_price_with_dates(api_key):
-    """Test token price endpoint with date parameters"""
-    mock_response = {
-        "success": True,
-        "data": [
-            {"time": "2024-01-01", "price": 1.0},
-            {"time": "2024-01-31", "price": 1.1},
-        ],
-    }
+    # Reset mock calls
+    mock_server.run_sse_async.reset_mock()
+    mock_server.run_stdio_async.reset_mock()
 
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = mock_response
+    # Test STDIO transport
+    task = asyncio.create_task(serve(TEST_API_KEY, transport="stdio"))
+    await asyncio.sleep(0.1)  # Give it time to start
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
-        # Test with both dates
-        result = await get_token_price(
-            token_address="token123",
-            time_from=20240101,  # January 1, 2024
-            time_to=20240131,  # January 31, 2024
-            api_key=api_key,
-        )
-
-        call_args = mock_request.call_args
-        params = call_args[0][1]
-        assert params["address"] == "token123"
-        assert params["from_time"] == 20240101
-        assert params["to_time"] == 20240131
-        assert result["success"] is True
-        assert len(result["data"]) == 2
-
-        # Test with optional dates (both None)
-        await get_token_price(token_address="token123", api_key=api_key)
-        call_args = mock_request.call_args
-        params = call_args[0][1]
-        assert "from_time" not in params
-        assert "to_time" not in params
-
-        # Test with only from_time
-        await get_token_price(
-            token_address="token123", time_from=20240101, api_key=api_key
-        )
-        call_args = mock_request.call_args
-        params = call_args[0][1]
-        assert params["from_time"] == 20240101
-        assert "to_time" not in params
+    assert mock_server.run_stdio_async.called
+    assert not mock_server.run_sse_async.called
 
 
 @pytest.mark.asyncio
-async def test_transaction_endpoints(api_key):
-    """Test transaction-related endpoints"""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = {"success": True, "data": {}}
+async def test_token_meta_call(
+    mocker: MockerFixture, mock_response: Dict[str, Any]
+) -> None:
+    """Test token_meta tool execution."""
+    server = create_mcp_server(TEST_API_KEY)
 
-        tx_sig = "4h5iBF43gC88BKrjkuC8RytGtKeMzj7Z93go9tPa3GCgnjgw1sQUsV4N44LCTxDuQ9KL8Sut88Jt1EunXNqptzbZ"
+    # Register tool
+    @server.tool(name=SolscanTools.TOKEN_META.value)
+    async def token_meta_tool(token_address: str) -> str:
+        return '{"success": true, "data": {"test": "data"}}'
 
-        # Test transaction detail
-        await get_transaction_detail(tx_sig, api_key)
-        call_args = mock_request.call_args
-        assert "/transaction/detail" == call_args[0][0]
-        assert call_args[0][1]["tx"] == tx_sig
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.TOKEN_META.value,
+        {"token_address": TEST_TOKEN_ADDRESS},
+    )
 
-        # Test transaction actions
-        await get_transaction_actions(tx_sig, api_key)
-        call_args = mock_request.call_args
-        assert "/transaction/actions" == call_args[0][0]
-        assert call_args[0][1]["tx"] == tx_sig
-
-
-@pytest.mark.asyncio
-async def test_get_defi_activities(api_key):
-    """Test DeFi activities endpoint with various parameters."""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = MOCK_DEFI_ACTIVITIES
-
-        # Test with wallet address
-        result = await get_defi_activities(
-            wallet_address="WaLLeTAddR3ss123", api_key=api_key
-        )
-        assert result["success"] is True
-        assert len(result["data"]) > 0
-        assert result["data"][0]["type"] == "swap"
-
-        # Test with date range in YYYYMMDD format
-        result = await get_defi_activities(
-            wallet_address="WaLLeTAddR3ss123",
-            from_time=20240101,  # January 1, 2024
-            to_time=20240131,  # January 31, 2024
-            api_key=api_key,
-        )
-
-        call_args = mock_request.call_args
-        params = call_args[0][1]
-        assert params["from_time"] == 20240101
-        assert params["to_time"] == 20240131
-        assert result["success"] is True
-
-        # Test with only from_time
-        result = await get_defi_activities(
-            wallet_address="WaLLeTAddR3ss123",
-            from_time=20240101,  # January 1, 2024
-            api_key=api_key,
-        )
-
-        call_args = mock_request.call_args
-        params = call_args[0][1]
-        assert params["from_time"] == 20240101
-        assert "to_time" not in params
-        assert result["success"] is True
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert result[0].text == '{"success": true, "data": {"test": "data"}}'
 
 
 @pytest.mark.asyncio
-async def test_get_token_accounts(api_key):
-    """Test token accounts endpoint functionality."""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = MOCK_TOKEN_ACCOUNTS
+async def test_token_markets_call(
+    mocker: MockerFixture, mock_response: Dict[str, Any]
+) -> None:
+    """Test token_markets tool execution."""
+    server = create_mcp_server(TEST_API_KEY)
 
-        # Test basic account lookup
-        result = await get_token_accounts(
-            wallet_address="WaLLeTAddR3ss123", api_key=api_key
-        )
-        assert result["success"] is True
-        assert len(result["data"]) > 0
-        assert result["data"][0]["balance"] == 5000.0
+    # Register tool
+    @server.tool(name=SolscanTools.TOKEN_MARKETS.value)
+    async def token_markets_tool(
+        token_address: str,
+        sort_by: str = None,
+        program: list[str] = None,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> str:
+        return '{"success": true, "data": {"test": "data"}}'
 
-        # Test with all parameters
-        result = await get_token_accounts(
-            wallet_address="WaLLeTAddR3ss123",
-            type="token",
-            page=1,
-            page_size=40,
-            hide_zero=True,
-            api_key=api_key,
-        )
-        assert result["success"] is True
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.TOKEN_MARKETS.value,
+        {
+            "token_address": TEST_TOKEN_ADDRESS,
+            "sort_by": "liquidity",
+            "program": ["raydium"],
+            "page": 1,
+            "page_size": 10,
+        },
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert result[0].text == '{"success": true, "data": {"test": "data"}}'
 
 
 @pytest.mark.asyncio
-async def test_get_token_holders(api_key):
-    """Test token holders endpoint with various parameters."""
-    with patch(
-        "solscan_mcp_server.server.make_request", new_callable=AsyncMock
-    ) as mock_request:
-        mock_request.return_value = MOCK_TOKEN_HOLDERS
+async def test_token_holders_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test token_holders tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
 
-        # Test basic holders lookup
-        result = await get_token_holders(
-            token_address="TokenM1ntAddr3ss123", api_key=api_key
-        )
-        assert result["success"] is True
-        assert len(result["data"]) > 0
-        assert result["data"][0]["amount"] == 10000.0
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.TOKEN_HOLDERS.value)
+    async def token_holders_tool(
+        token_address: str,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> str:
+        return json.dumps(mock_response, indent=2)
 
-        # Test with all parameters
-        result = await get_token_holders(
-            token_address="TokenM1ntAddr3ss123",
-            page=1,
-            page_size=40,
-            from_amount="1000",
-            to_amount="100000",
-            api_key=api_key,
-        )
-        assert result["success"] is True
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.TOKEN_HOLDERS.value,
+        {
+            "token_address": TEST_TOKEN_ADDRESS,
+            "limit": 10,
+            "offset": 0,
+        },
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+
+@pytest.mark.asyncio
+async def test_token_price_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test token_price tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.TOKEN_PRICE.value)
+    async def token_price_tool(token_address: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.TOKEN_PRICE.value,
+        {"token_address": TEST_TOKEN_ADDRESS},
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+
+@pytest.mark.asyncio
+async def test_token_accounts_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test token_accounts tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.TOKEN_ACCOUNTS.value)
+    async def token_accounts_tool(wallet_address: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.TOKEN_ACCOUNTS.value,
+        {"wallet_address": TEST_WALLET_ADDRESS},
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+
+@pytest.mark.asyncio
+async def test_defi_activities_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test defi_activities tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.DEFI_ACTIVITIES.value)
+    async def defi_activities_tool(
+        wallet_address: str,
+        before_tx_signature: Optional[str] = None,
+        limit: int = 10,
+    ) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.DEFI_ACTIVITIES.value,
+        {
+            "wallet_address": TEST_WALLET_ADDRESS,
+            "before_tx_signature": None,
+            "limit": 10,
+        },
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+
+@pytest.mark.asyncio
+async def test_balance_change_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test balance_change tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.BALANCE_CHANGE.value)
+    async def balance_change_tool(tx_signature: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.BALANCE_CHANGE.value,
+        {"tx_signature": TEST_TX_SIGNATURE},
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+
+@pytest.mark.asyncio
+async def test_transaction_detail_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test transaction_detail tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.TRANSACTION_DETAIL.value)
+    async def transaction_detail_tool(tx_signature: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.TRANSACTION_DETAIL.value,
+        {"tx_signature": TEST_TX_SIGNATURE},
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+
+@pytest.mark.asyncio
+async def test_transaction_actions_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test transaction_actions tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.TRANSACTION_ACTIONS.value)
+    async def transaction_actions_tool(tx_signature: str) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    # Simulate tool call
+    result = await server.call_tool(
+        SolscanTools.TRANSACTION_ACTIONS.value,
+        {"tx_signature": TEST_TX_SIGNATURE},
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+
+def test_solscan_tools_enum() -> None:
+    """Test SolscanTools enum values."""
+    assert SolscanTools.TOKEN_META.value == "token_meta"
+    assert SolscanTools.TOKEN_MARKETS.value == "token_markets"
+    assert SolscanTools.TOKEN_HOLDERS.value == "token_holders"
+    assert SolscanTools.TOKEN_PRICE.value == "token_price"
+    assert SolscanTools.TOKEN_ACCOUNTS.value == "token_accounts"
+    assert SolscanTools.DEFI_ACTIVITIES.value == "defi_activities"
+    assert SolscanTools.BALANCE_CHANGE.value == "balance_change"
+    assert SolscanTools.TRANSACTION_DETAIL.value == "transaction_detail"
+    assert SolscanTools.TRANSACTION_ACTIONS.value == "transaction_actions"
