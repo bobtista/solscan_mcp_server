@@ -15,6 +15,7 @@ from solscan_mcp_server.api import (
     ActivityType,
     BalanceFlow,
     SortOrder,
+    get_account_transactions,
     get_balance_change,
     get_defi_activities,
     get_token_accounts,
@@ -39,6 +40,7 @@ class SolscanTools(str, Enum):
     TOKEN_ACCOUNTS = "token_accounts"
     DEFI_ACTIVITIES = "defi_activities"
     BALANCE_CHANGE = "balance_change"
+    ACCOUNT_TRANSACTIONS = "account_transactions"
     TRANSACTION_DETAIL = "transaction_detail"
     TRANSACTION_ACTIONS = "transaction_actions"
 
@@ -381,6 +383,33 @@ def create_mcp_server(
         """
         solscan_ctx = ctx.request_context.lifespan_context
         result = await get_transaction_actions(tx, solscan_ctx.api_key)
+        return json.dumps(result, indent=2)
+
+    @server.tool()
+    async def account_transactions_tool(
+        ctx: Context,
+        wallet_address: str,
+        before: Optional[str] = None,
+        limit: int = 10,
+    ) -> str:
+        """Get transactions for a wallet address.
+
+        Args:
+            ctx: The MCP context containing shared resources
+            wallet_address: The wallet address to fetch transactions for
+            before: The signature of the latest transaction of previous page
+            limit: Number of transactions to return (10, 20, 30, or 40)
+
+        Returns:
+            str: JSON string containing wallet transactions
+        """
+        solscan_ctx = ctx.request_context.lifespan_context
+        result = await get_account_transactions(
+            wallet_address=wallet_address,
+            before=before,
+            limit=limit,
+            api_key=solscan_ctx.api_key,
+        )
         return json.dumps(result, indent=2)
 
     return server

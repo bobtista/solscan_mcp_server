@@ -11,6 +11,7 @@ from solscan_mcp_server.api import (
     ActivityType,
     BalanceFlow,
     SortOrder,
+    get_account_transactions,
     get_balance_change,
     get_defi_activities,
     get_token_accounts,
@@ -447,6 +448,71 @@ async def test_get_transaction_actions(
     mock_make_request.assert_called_once_with(
         "/transaction/actions",
         {"tx": TEST_TX_SIGNATURE},
+        TEST_API_KEY,
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_account_transactions(
+    mock_session: ClientSession,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test get_account_transactions function with pagination."""
+    mock_make_request = mocker.patch("solscan_mcp_server.api.make_request")
+    mock_make_request.return_value = mock_response
+
+    # Test with all parameters
+    result = await get_account_transactions(
+        wallet_address=TEST_WALLET_ADDRESS,
+        before="test_tx_signature",
+        limit=30,
+        api_key=TEST_API_KEY,
+    )
+
+    assert result == mock_response
+    mock_make_request.assert_called_once_with(
+        "/account/transactions",
+        {
+            "address": TEST_WALLET_ADDRESS,
+            "before": "test_tx_signature",
+            "limit": 30,
+        },
+        TEST_API_KEY,
+    )
+
+    # Test with default parameters
+    mock_make_request.reset_mock()
+    result = await get_account_transactions(
+        wallet_address=TEST_WALLET_ADDRESS,
+        api_key=TEST_API_KEY,
+    )
+
+    assert result == mock_response
+    mock_make_request.assert_called_once_with(
+        "/account/transactions",
+        {
+            "address": TEST_WALLET_ADDRESS,
+            "limit": 10,
+        },
+        TEST_API_KEY,
+    )
+
+    # Test with invalid limit
+    mock_make_request.reset_mock()
+    result = await get_account_transactions(
+        wallet_address=TEST_WALLET_ADDRESS,
+        limit=50,  # Invalid limit
+        api_key=TEST_API_KEY,
+    )
+
+    assert result == mock_response
+    mock_make_request.assert_called_once_with(
+        "/account/transactions",
+        {
+            "address": TEST_WALLET_ADDRESS,
+            "limit": 10,  # Should default to 10
+        },
         TEST_API_KEY,
     )
 

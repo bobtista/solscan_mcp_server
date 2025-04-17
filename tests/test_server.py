@@ -10,10 +10,12 @@ from fastmcp import Context, FastMCP
 from mcp.types import TextContent
 from pytest_mock import MockerFixture
 
+from solscan_mcp_server.api import ActivityType, BalanceFlow, SortOrder
 from solscan_mcp_server.server import (
     SolscanContext,
     SolscanTools,
     create_mcp_server,
+    get_account_transactions,
     serve,
     solscan_lifespan,
 )
@@ -484,5 +486,54 @@ def test_solscan_tools_enum() -> None:
     assert SolscanTools.TOKEN_ACCOUNTS.value == "token_accounts"
     assert SolscanTools.DEFI_ACTIVITIES.value == "defi_activities"
     assert SolscanTools.BALANCE_CHANGE.value == "balance_change"
+    assert SolscanTools.ACCOUNT_TRANSACTIONS.value == "account_transactions"
     assert SolscanTools.TRANSACTION_DETAIL.value == "transaction_detail"
     assert SolscanTools.TRANSACTION_ACTIONS.value == "transaction_actions"
+
+
+@pytest.mark.asyncio
+async def test_account_transactions_tool(
+    mock_context: Context,
+    mock_response: Dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test account_transactions tool."""
+    server = FastMCP(
+        "mcp-solscan-test",
+        description="Test MCP server for Solscan API",
+    )
+
+    # Register tool directly in test
+    @server.tool(name=SolscanTools.ACCOUNT_TRANSACTIONS.value)
+    async def account_transactions_tool(
+        wallet_address: str,
+        before: Optional[str] = None,
+        limit: int = 10,
+    ) -> str:
+        return json.dumps(mock_response, indent=2)
+
+    # Test with all parameters
+    result = await server.call_tool(
+        SolscanTools.ACCOUNT_TRANSACTIONS.value,
+        {
+            "wallet_address": TEST_WALLET_ADDRESS,
+            "before": TEST_TX_SIGNATURE,
+            "limit": 30,
+        },
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response
+
+    # Test with default parameters
+    result = await server.call_tool(
+        SolscanTools.ACCOUNT_TRANSACTIONS.value,
+        {"wallet_address": TEST_WALLET_ADDRESS},
+    )
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    assert json.loads(result[0].text) == mock_response

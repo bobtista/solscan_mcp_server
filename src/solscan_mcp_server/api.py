@@ -378,11 +378,40 @@ async def get_transaction_detail(tx: str, api_key: str) -> Dict[str, Any]:
 
 
 async def get_transaction_actions(tx: str, api_key: str) -> Dict[str, Any]:
-    """Get transaction actions and token transfers.
+    """Get transaction actions from Solscan API."""
+    logger.info(f"Fetching actions for transaction {tx}")
+    return await make_request("/transaction/actions", {"tx": tx}, api_key)
+
+
+async def get_account_transactions(
+    wallet_address: str,
+    before: Optional[str] = None,
+    limit: int = 10,
+    api_key: str = "",
+) -> Dict[str, Any]:
+    """Get transactions for a wallet address.
 
     Args:
-        tx: Transaction signature
+        wallet_address: The wallet address to fetch transactions for
+        before: The signature of the latest transaction of previous page (for pagination)
+        limit: Number of transactions to return (10, 20, 30, or 40)
         api_key: Solscan API key
     """
-    logger.info(f"Fetching transaction actions for {tx}")
-    return await make_request("/transaction/actions", {"tx": tx}, api_key)
+    logger.info(f"Fetching transactions for wallet {wallet_address}")
+
+    # Validate limit
+    if limit not in [10, 20, 30, 40]:
+        logger.warning(f"Invalid limit {limit}, defaulting to 10")
+        limit = 10
+
+    # Build params
+    params: Dict[str, Any] = {
+        "address": wallet_address,
+        "limit": limit,
+    }
+
+    # Add optional before parameter if provided
+    if before:
+        params["before"] = before
+
+    return await make_request("/account/transactions", params, api_key)

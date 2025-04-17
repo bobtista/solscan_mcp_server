@@ -51,16 +51,23 @@ The server provides several essential tools for interacting with Solscan:
    - Filter by token and amount
    - Remove spam transactions
 
-8. **`transaction_detail`**: Get transaction information
+8. **`account_transactions`**: Get wallet transactions
+
+   - List wallet transactions
+   - Paginate through transaction history
+   - Configurable result limits
+
+9. **`transaction_detail`**: Get transaction information
 
    - Detailed transaction data
    - Parsed instructions
    - Fee information
 
-9. **`transaction_actions`**: Get transaction actions
-   - List token transfers
-   - View program interactions
-   - Decoded instruction data
+10. **`transaction_actions`**: Get transaction actions
+
+- List token transfers
+- View program interactions
+- Decoded instruction data
 
 ## Prerequisites
 

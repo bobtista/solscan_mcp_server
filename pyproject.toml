@@ -24,7 +24,7 @@ dependencies = [
     "click>=8.1.7",
     "mcp>=1.0.0",
     "pydantic>=2.0.0",
-    "fastmcp>=2.1.1",
+    "fastmcp==2.1.2",
     "typing-extensions>=4.5.0",  # For enhanced type hints
     "python-dotenv>=1.0.0",     # For .env file support
 ]
