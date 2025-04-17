@@ -1,286 +1,218 @@
-# solscan-mcp-server: A Solscan Pro API MCP Server
+# Solscan MCP Server
+
+A Model Context Protocol (MCP) server implementation for interacting with the Solscan Pro API. This server allows AI agents to fetch and analyze token, transaction, and DeFi activity data from the Solana blockchain.
 
 ## Overview
 
-A Model Context Protocol server for interacting with the Solscan Pro API. This server provides tools to query token information, account activities, and transaction details on the Solana blockchain via Large Language Models.
+This MCP server provides a bridge between AI agents and the Solscan Pro API service. It follows the best practices laid out by Anthropic for building MCP servers, allowing seamless integration with any MCP-compatible client.
 
-Please note that solscan-mcp-server requires a Solscan Pro API key to function. You can obtain one from [Solscan APIs](https://solscan.io/apis).
+## Features
 
-### Tools
+The server provides several essential tools for interacting with Solscan:
 
-1. `token_meta`
+1. **`token_meta`**: Get token metadata
 
-   - Get token metadata
-   - Input:
-     - `token_address` (string): A token address on Solana blockchain
-   - Returns: Token metadata including name, symbol, price, market cap, etc.
+   - Fetch comprehensive token information
+   - Get name, symbol, price, market cap, etc.
 
-2. `token_markets`
+2. **`token_markets`**: Get token market data and liquidity pools
 
-   - Get token market data and liquidity pools
-   - Inputs:
-     - `token_address` (string): Token address to query
-     - `sort_by` (string, optional): Field to sort by
-     - `program` (string[], optional): Filter by program addresses (max 5)
-     - `page` (number, optional): Page number (default: 1)
-     - `page_size` (number, optional): Items per page (10, 20, 30, 40, 60, 100)
-   - Returns: Market data and liquidity pools for the token paired with WSOL
+   - View market pairs and liquidity pools
+   - Filter by program addresses
+   - Sort and paginate results
 
-3. `token_holders`
+3. **`token_holders`**: Get token holder distribution
 
-   - Get token holder distribution
-   - Inputs:
-     - `token_address` (string): Token address to query
-     - `page` (number, optional): Page number (default: 1)
-     - `page_size` (number, optional): Items per page (10, 20, 30, 40)
-     - `from_amount` (string, optional): Minimum token holding amount
-     - `to_amount` (string, optional): Maximum token holding amount
-   - Returns: List of token holders with their balances
+   - View holder balances and distribution
+   - Filter by amount ranges
+   - Paginate through results
 
-4. `token_price`
+4. **`token_price`**: Get token price information
 
-   - Get historical token price data
-   - Inputs:
-     - `token_address` (string): Token address to query
-     - `from_time` (number, optional): Start date in YYYYMMDD format (e.g., 20240701)
-     - `to_time` (number, optional): End date in YYYYMMDD format (e.g., 20240715)
-   - Returns: Historical price data for the specified date range
+   - Historical price data
+   - Filter by date range
+   - Price trends and statistics
 
-5. `token_accounts`
+5. **`token_accounts`**: Get token holdings for a wallet
 
-   - Get token holdings for a wallet
-   - Inputs:
-     - `wallet_address` (string): Wallet address to query
-     - `type` (string, optional): Token type ("token" or "nft", default: "token")
-     - `page` (number, optional): Page number (default: 1)
-     - `page_size` (number, optional): Items per page (10, 20, 30, 40)
-     - `hide_zero` (boolean, optional): Hide zero balance tokens (default: true)
-   - Returns: List of token holdings for the wallet
+   - List token and NFT holdings
+   - Filter zero balances
+   - Paginate results
 
-6. `defi_activities`
+6. **`defi_activities`**: Get DeFi activities for a wallet
 
-   - Get DeFi activities for a wallet
-   - Inputs:
-     - `wallet_address` (string): Wallet address to query
-     - `activity_type` (string[], optional): Types of activities to filter
-     - `from_address` (string, optional): Filter activities from an address
-     - `platform` (string[], optional): Filter by platform addresses (max 5)
-     - `source` (string[], optional): Filter by source addresses (max 5)
-     - `token` (string, optional): Filter by token address
-     - `from_time` (number, optional): Start date in YYYYMMDD format (e.g., 20240701)
-     - `to_time` (number, optional): End date in YYYYMMDD format (e.g., 20240715)
-     - `page` (number, optional): Page number (default: 1)
-     - `page_size` (number, optional): Items per page (10, 20, 30, 40, 60, 100)
-     - `sort_by` (string, optional): Sort field (default: "block_time")
-     - `sort_order` (string, optional): Sort order ("asc" or "desc", default: "desc")
-   - Returns: List of DeFi activities
+   - Filter by activity type and platform
+   - Sort by time or other metrics
+   - Comprehensive activity details
 
-7. `balance_change`
+7. **`balance_change`**: Get balance change activities
 
-   - Get detailed balance change activities
-   - Inputs:
-     - `wallet_address` (string): Wallet address to query
-     - `token_account` (string, optional): Token account to filter
-     - `token` (string, optional): Token address to filter
-     - `from_time` (number, optional): Start date in YYYYMMDD format (e.g., 20240701)
-     - `to_time` (number, optional): End date in YYYYMMDD format (e.g., 20240715)
-     - `page_size` (number, optional): Items per page (10, 20, 30, 40, 60, 100)
-     - `page` (number, optional): Page number (default: 1)
-     - `remove_spam` (boolean, optional): Remove spam activities (default: true)
-     - `amount` (number[], optional): Filter by amount range [min, max]
-     - `flow` (string, optional): Filter by direction ("in" or "out")
-     - `sort_by` (string, optional): Sort field (default: "block_time")
-     - `sort_order` (string, optional): Sort order ("asc" or "desc", default: "desc")
-   - Returns: List of balance change activities
+   - Track token balance changes
+   - Filter by token and amount
+   - Remove spam transactions
 
-8. `transaction_detail`
+8. **`transaction_detail`**: Get transaction information
 
-   - Get detailed transaction information
-   - Input:
-     - `tx` (string): Transaction signature/address
-   - Returns: Detailed transaction data including parsed instructions
+   - Detailed transaction data
+   - Parsed instructions
+   - Fee information
 
-9. `transaction_actions`
-   - Get transaction actions and token transfers
-   - Input:
-     - `tx` (string): Transaction signature/address
-   - Returns: List of actions and token transfers in the transaction
+9. **`transaction_actions`**: Get transaction actions
+   - List token transfers
+   - View program interactions
+   - Decoded instruction data
+
+## Prerequisites
+
+- Python 3.10+
+- Solscan Pro API key (obtain from [Solscan APIs](https://solscan.io/apis))
+- Docker if running the MCP server as a container (recommended)
 
 ## Installation
 
-### Using uv (recommended)
+### Using uv (Recommended)
 
-When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
-use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run _solscan-mcp-server_.
+When using [`uv`](https://docs.astral.sh/uv/), no specific installation is needed. We use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run _solscan-mcp-server_.
 
-### Using PIP
+### Using pip
 
-Alternatively you can install `solscan-mcp-server` via pip:
+Alternatively, install via pip:
 
-```
+```bash
 pip install solscan-mcp-server
-```
-
-After installation, you can run it as a script using:
-
-```
-python -m solscan_mcp_server
 ```
 
 ## Configuration
 
-The server requires a Solscan Pro API key to be set in the environment:
+You can configure the server using either environment variables or command-line arguments:
+
+| Option    | Env Variable    | CLI Argument | Default   | Description                                |
+| --------- | --------------- | ------------ | --------- | ------------------------------------------ |
+| API Key   | SOLSCAN_API_KEY | --api-key    | Required  | Your Solscan Pro API key                   |
+| Transport | TRANSPORT       | --transport  | sse       | Transport protocol (sse or stdio)          |
+| Host      | HOST            | --host       | 127.0.0.1 | Host to bind to when using SSE transport   |
+| Port      | PORT            | --port       | 8050      | Port to listen on when using SSE transport |
+| Log Level | LOG_LEVEL       | --verbose    | INFO      | Logging level (use -v or -vv for detail)   |
+
+## Running the Server
+
+### Using uvx (Recommended)
 
 ```bash
-export SOLSCAN_API_KEY="your-api-key-here"
+# Using environment variables:
+SOLSCAN_API_KEY=your-key uvx solscan-mcp-server
+
+# Using CLI arguments:
+uvx solscan-mcp-server --api-key your-key
 ```
 
-### Usage with Claude Desktop
+### Using pip Installation
 
-Add this to your `claude_desktop_config.json`:
+```bash
+# Using environment variables:
+SOLSCAN_API_KEY=your-key python -m solscan_mcp_server
 
-<details>
-<summary>Using uvx</summary>
+# Using CLI arguments:
+python -m solscan_mcp_server --api-key your-key
+```
+
+### Using Docker
+
+```bash
+# Build the image
+docker build -t solscan-mcp-server .
+
+# Run with environment variables
+docker run -e SOLSCAN_API_KEY=your-key solscan-mcp-server
+```
+
+## Integration with MCP Clients
+
+### Claude Desktop Configuration
+
+#### Using uvx (Recommended)
+
+Add to your `claude_desktop_config.json`:
 
 ```json
-"mcpServers": {
-  "solscan": {
-    "command": "uvx",
-    "args": ["solscan-mcp-server"]
+{
+  "mcpServers": {
+    "solscan": {
+      "command": "uvx",
+      "args": ["solscan-mcp-server"]
+    }
   }
 }
 ```
 
-</details>
-
-<details>
-<summary>Using pip installation</summary>
+#### Using pip Installation
 
 ```json
-"mcpServers": {
-  "solscan": {
-    "command": "python",
-    "args": ["-m", "solscan_mcp_server"]
+{
+  "mcpServers": {
+    "solscan": {
+      "command": "python",
+      "args": ["-m", "solscan_mcp_server"]
+    }
   }
 }
 ```
 
-</details>
-
-### Usage with [Zed](https://github.com/zed-industries/zed)
+### Zed Configuration
 
 Add to your Zed settings.json:
 
-<details>
-<summary>Using uvx</summary>
-
 ```json
-"context_servers": [
+"context_servers": {
   "solscan": {
     "command": {
       "path": "uvx",
       "args": ["solscan-mcp-server"]
     }
   }
-],
-```
-
-</details>
-
-<details>
-<summary>Using pip installation</summary>
-
-```json
-"context_servers": {
-  "solscan_mcp_server": {
-    "command": {
-      "path": "python",
-      "args": ["-m", "solscan_mcp_server"]
-    }
-  }
-},
-```
-
-</details>
-
-## Debugging
-
-You can use the MCP inspector to debug the server. For uvx installations:
-
-```
-npx @modelcontextprotocol/inspector uvx solscan-mcp-server
-```
-
-Or if you've installed the package in a specific directory or are developing on it:
-
-```
-cd path/to/servers/src/solscan
-npx @modelcontextprotocol/inspector uv run solscan_mcp_server
-```
-
-Running `tail -n 20 -f ~/Library/Logs/Claude/mcp*.log` will show the logs from the server and may
-help you debug any issues.
-
-## Development
-
-If you are doing local development, you can test your changes using the MCP inspector or the Claude desktop app.
-
-For Claude desktop app, add the following to your `claude_desktop_config.json`:
-
-### UVX
-
-```json
-{
-"mcpServers": {
-  "solscan": {
-    "command": "uv",
-    "args": [
-      "--directory",
-      "/<path to mcp-servers>/mcp-servers/src/solscan",
-      "run",
-      "solscan_mcp_server"
-    ]
-  }
 }
 ```
 
-## Docker Support
+## Development
 
-The MCP server can be run in a Docker container. This provides an isolated environment and makes deployment easier.
-
-### Building the Docker Image
+### Running Tests
 
 ```bash
-# Build the image
-docker build -t solscan-mcp-server .
+# Install dev dependencies
+uv pip install -e ".[dev]"
+
+# Run tests
+pytest
 ```
 
-### Running with Docker
+### Code Quality
 
 ```bash
-# Run the container with your Solscan Pro API key
-docker run -e SOLSCAN_API_KEY=your_api_key_here solscan-mcp-server
+# Run type checker
+pyright
 
-# Run with custom verbosity level
-docker run -e SOLSCAN_API_KEY=your_api_key_here solscan-mcp-server --verbose
-
-# Run in detached mode
-docker run -d -e SOLSCAN_API_KEY=your_api_key_here solscan-mcp-server
+# Run linter
+ruff check .
 ```
 
-### Environment Variables
+### Debugging
 
-The Docker container accepts the following environment variables:
+You can use the MCP inspector to debug the server:
 
-- `SOLSCAN_API_KEY` (required): Your Solscan Pro API key
+```bash
+npx @modelcontextprotocol/inspector uvx solscan-mcp-server
+```
 
-### Docker Best Practices
+For development debugging:
 
-1. Never commit your API key in the Dockerfile or docker-compose files
-2. Use environment files or secure secrets management for the API key
-3. Consider using Docker health checks in production
-4. The container runs as a non-root user for security
+```bash
+tail -n 20 -f ~/Library/Logs/Claude/mcp*.log
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+This project is licensed under the MIT License. See the LICENSE file for details.
