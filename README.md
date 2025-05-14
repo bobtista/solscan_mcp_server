@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/bobtista-solscan-mcp-server-badge.png)](https://mseep.ai/app/bobtista-solscan-mcp-server)
+
 # Solscan MCP Server
 
 A Model Context Protocol (MCP) server implementation for interacting with the Solscan Pro API. This server allows AI agents to fetch and analyze token, transaction, and DeFi activity data from the Solana blockchain.
